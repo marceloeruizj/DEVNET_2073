@@ -22,3 +22,9 @@ to the user’s physical location, for the duration asked by the user.
 The entire configuration will be removed at the end of the time allowed for the Hotspot to be enabled.
 
 Small Application code changes could create Hotspot networks based on schedule, incident response or social events.
+
+---
+
+## Capacitación: Agentes de IA con Amazon Bedrock
+
+La carpeta [`capacitacion-agentes-bedrock/`](capacitacion-agentes-bedrock/README.md) contiene una capacitación completa (en español) para crear agentes de IA con Amazon Bedrock AgentCore: un agente que crea la estructura documental estándar de proyectos de construcción en Google Drive o Microsoft 365, con accesos restringidos por rol.

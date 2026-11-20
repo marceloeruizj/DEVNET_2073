@@ -1,0 +1,8 @@
+# Dependencias del agente en AgentCore Runtime.
+# "agentcore configure" detecta este archivo porque esta junto al punto de entrada.
+bedrock-agentcore
+anthropic[bedrock]>=1.0
+boto3>=1.40
+google-api-python-client>=2.150
+google-auth>=2.35
+msal>=1.31

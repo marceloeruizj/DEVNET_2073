@@ -1,0 +1,4 @@
+# [Anexo A - Classic] Dependencias empaquetadas en la Lambda (boto3 ya viene en el runtime)
+google-api-python-client>=2.150
+google-auth>=2.35
+msal>=1.31

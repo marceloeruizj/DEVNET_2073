@@ -1,0 +1,142 @@
+{
+  "version": "1.0",
+  "descripcion": "Estructura estandar de carpetas para proyectos de construccion con permisos por rol. Basada en practicas de gestion documental (ISO 19650 / PMBOK) adaptadas a obra.",
+  "formato_raiz": "{codigo}_{nombre}",
+  "niveles_acceso": {
+    "lectura": "Puede ver y descargar",
+    "comentario": "Puede ver y comentar",
+    "edicion": "Puede crear, editar y eliminar archivos",
+    "gestion": "Edicion + organizar/mover carpetas"
+  },
+  "roles": {
+    "DIR": {"nombre": "Director / Gerente de Proyecto", "interno": true},
+    "ADM": {"nombre": "Administracion y Finanzas", "interno": true},
+    "LEG": {"nombre": "Legal y Contratos", "interno": true},
+    "ING": {"nombre": "Ingenieria / Oficina Tecnica", "interno": true},
+    "ARQ": {"nombre": "Arquitectura y Diseno (consultores)", "interno": false},
+    "OBR": {"nombre": "Residente / Jefe de Obra", "interno": true},
+    "CAL": {"nombre": "Calidad QA/QC", "interno": true},
+    "SSO": {"nombre": "Seguridad, Salud Ocupacional y Medio Ambiente", "interno": true},
+    "CON": {"nombre": "Contratistas y Subcontratistas", "interno": false},
+    "CLI": {"nombre": "Cliente / Mandante", "interno": false}
+  },
+  "roles_globales": {"DIR": "gestion"},
+  "convencion_grupos": "proy-{codigo}-{rol}@{dominio}",
+  "carpetas": [
+    {
+      "nombre": "00_Administracion_Proyecto",
+      "permisos": {"ADM": "edicion", "LEG": "lectura", "OBR": "lectura"},
+      "subcarpetas": [
+        {"nombre": "01_Acta_Constitucion"},
+        {"nombre": "02_Cronograma", "permisos": {"ING": "lectura", "CAL": "lectura", "SSO": "lectura"}},
+        {"nombre": "03_Actas_Reuniones", "permisos": {"ING": "comentario"}},
+        {"nombre": "04_Informes_Gestion", "permisos": {"CLI": "lectura"}}
+      ]
+    },
+    {
+      "nombre": "01_Contratos_Legal",
+      "permisos": {"LEG": "edicion", "ADM": "lectura"},
+      "subcarpetas": [
+        {"nombre": "01_Contrato_Principal"},
+        {"nombre": "02_Subcontratos", "permisos": {"OBR": "lectura"}},
+        {"nombre": "03_Garantias_Polizas"},
+        {"nombre": "04_Permisos_Licencias", "permisos": {"ING": "lectura", "OBR": "lectura", "SSO": "lectura"}}
+      ]
+    },
+    {
+      "nombre": "02_Finanzas_Costos",
+      "permisos": {"ADM": "edicion"},
+      "subcarpetas": [
+        {"nombre": "01_Presupuesto", "permisos": {"OBR": "lectura"}},
+        {"nombre": "02_Estados_Pago", "permisos": {"OBR": "comentario"}},
+        {"nombre": "03_Ordenes_Compra", "permisos": {"OBR": "lectura"}},
+        {"nombre": "04_Facturacion"}
+      ]
+    },
+    {
+      "nombre": "03_Diseno_Ingenieria",
+      "permisos": {"ING": "edicion", "ARQ": "edicion", "OBR": "lectura", "CAL": "lectura"},
+      "subcarpetas": [
+        {"nombre": "01_Arquitectura"},
+        {"nombre": "02_Estructuras"},
+        {"nombre": "03_Instalaciones_MEP"},
+        {"nombre": "04_Modelos_BIM"},
+        {"nombre": "05_Especificaciones_Tecnicas", "permisos": {"CON": "lectura"}}
+      ]
+    },
+    {
+      "nombre": "04_Planos",
+      "permisos": {"ING": "gestion", "ARQ": "lectura", "OBR": "lectura"},
+      "subcarpetas": [
+        {"nombre": "01_En_Revision", "permisos": {"ARQ": "edicion"}},
+        {
+          "nombre": "02_Aprobados_Para_Construccion",
+          "permisos": {"CAL": "lectura", "SSO": "lectura", "CON": "lectura", "CLI": "lectura"}
+        },
+        {"nombre": "03_As_Built", "permisos": {"CLI": "lectura", "CAL": "lectura"}}
+      ]
+    },
+    {
+      "nombre": "05_Construccion_Obra",
+      "permisos": {"OBR": "edicion", "ING": "lectura", "CAL": "lectura", "SSO": "lectura"},
+      "subcarpetas": [
+        {"nombre": "01_Libro_Obra"},
+        {"nombre": "02_Informes_Diarios"},
+        {"nombre": "03_Fotografias", "permisos": {"CLI": "lectura"}},
+        {"nombre": "04_RFI_Consultas", "permisos": {"CON": "edicion", "ING": "edicion"}},
+        {"nombre": "05_Ordenes_Cambio", "permisos": {"ADM": "lectura", "LEG": "lectura"}}
+      ]
+    },
+    {
+      "nombre": "06_Calidad_QAQC",
+      "permisos": {"CAL": "edicion", "OBR": "lectura", "ING": "lectura"},
+      "subcarpetas": [
+        {"nombre": "01_Plan_Calidad", "permisos": {"CON": "lectura"}},
+        {"nombre": "02_Protocolos_Inspeccion", "permisos": {"OBR": "edicion"}},
+        {"nombre": "03_No_Conformidades", "permisos": {"OBR": "comentario"}},
+        {"nombre": "04_Ensayos_Laboratorio", "permisos": {"CLI": "lectura"}}
+      ]
+    },
+    {
+      "nombre": "07_Seguridad_SSOMA",
+      "permisos": {"SSO": "edicion", "OBR": "lectura", "CON": "lectura"},
+      "subcarpetas": [
+        {"nombre": "01_Plan_Seguridad"},
+        {
+          "nombre": "02_Incidentes_Accidentes",
+          "heredar": false,
+          "permisos": {"SSO": "edicion", "LEG": "lectura"},
+          "nota": "Informacion sensible: NO hereda acceso de contratistas ni de obra."
+        },
+        {"nombre": "03_Capacitaciones", "permisos": {"CON": "edicion"}},
+        {"nombre": "04_Inspecciones_Seguridad"}
+      ]
+    },
+    {
+      "nombre": "08_Subcontratistas",
+      "permisos": {"OBR": "edicion", "ADM": "lectura"},
+      "subcarpetas": [
+        {"nombre": "01_Documentacion_Contratistas", "permisos": {"SSO": "lectura", "LEG": "lectura"}},
+        {"nombre": "02_Entregables_Contratistas", "permisos": {"CON": "edicion", "CAL": "lectura"}}
+      ]
+    },
+    {
+      "nombre": "09_Comunicaciones_Cliente",
+      "permisos": {"CLI": "lectura", "ADM": "lectura"},
+      "subcarpetas": [
+        {"nombre": "01_Correspondencia_Enviada"},
+        {"nombre": "02_Correspondencia_Recibida"},
+        {"nombre": "03_Entregas_Cliente", "permisos": {"ING": "edicion"}}
+      ]
+    },
+    {
+      "nombre": "10_Cierre_Proyecto",
+      "permisos": {"ADM": "edicion", "CAL": "edicion", "OBR": "lectura"},
+      "subcarpetas": [
+        {"nombre": "01_Recepcion_Obra", "permisos": {"CLI": "lectura"}},
+        {"nombre": "02_Manuales_Operacion", "permisos": {"CLI": "lectura", "ING": "edicion"}},
+        {"nombre": "03_Lecciones_Aprendidas", "permisos": {"ING": "comentario", "SSO": "comentario"}}
+      ]
+    }
+  ]
+}

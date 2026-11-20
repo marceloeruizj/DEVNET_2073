@@ -1,0 +1,237 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  [ANEXO A - Bedrock Agents Classic, solo cuentas existentes]
+  Capacitacion - Agente de Amazon Bedrock que crea la estructura estandar de
+  carpetas de proyectos de construccion en Google Drive / Microsoft 365 con
+  accesos por rol.
+
+Parameters:
+  NombreAgente:
+    Type: String
+    Default: arquitecto-documental
+  ModeloFundacional:
+    Type: String
+    Default: anthropic.claude-opus-5-5
+    Description: >
+      ID del modelo o del perfil de inferencia habilitado en su cuenta/region
+      (Consola Bedrock > Model access). Algunos modelos solo se ofrecen via
+      perfil de inferencia entre regiones (prefijo us. / eu. / global.).
+  GoogleSecretArn:
+    Type: String
+    Default: ""
+    Description: ARN del secreto con la cuenta de servicio de Google (vacio = deshabilitado)
+  M365SecretArn:
+    Type: String
+    Default: ""
+    Description: ARN del secreto con la app de Entra ID (vacio = deshabilitado)
+  ModoSimulacion:
+    Type: String
+    AllowedValues: ["true", "false"]
+    Default: "true"
+    Description: "true = no toca ninguna nube (ideal para el laboratorio)"
+
+Conditions:
+  ConGoogle: !Not [!Equals [!Ref GoogleSecretArn, ""]]
+  ConM365: !Not [!Equals [!Ref M365SecretArn, ""]]
+  ConAlgunSecreto: !Or [!Condition ConGoogle, !Condition ConM365]
+
+Resources:
+  # ------------------------------------------------------------------ Lambda
+  RolLambda:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: {Service: lambda.amazonaws.com}
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - !If
+          - ConAlgunSecreto
+          - PolicyName: LeerSecretosProveedores
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action: secretsmanager:GetSecretValue
+                  Resource:
+                    - !If [ConGoogle, !Ref GoogleSecretArn, !Ref AWS::NoValue]
+                    - !If [ConM365, !Ref M365SecretArn, !Ref AWS::NoValue]
+          - !Ref AWS::NoValue
+
+  FuncionAcciones:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${NombreAgente}-acciones"
+      Runtime: python3.12
+      Handler: lambda_function.lambda_handler
+      Timeout: 300
+      MemorySize: 512
+      Role: !GetAtt RolLambda.Arn
+      Code: ../../build/lambda   # "aws cloudformation package" lo sube a S3
+      Environment:
+        Variables:
+          MODO_SIMULACION: !Ref ModoSimulacion
+          GOOGLE_SECRET_ARN: !Ref GoogleSecretArn
+          M365_SECRET_ARN: !Ref M365SecretArn
+
+  PermisoBedrockInvocaLambda:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref FuncionAcciones
+      Principal: bedrock.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !GetAtt Agente.AgentArn
+
+  # --------------------------------------------------------------- Guardrail
+  Barrera:
+    Type: AWS::Bedrock::Guardrail
+    Properties:
+      Name: !Sub "${NombreAgente}-guardrail"
+      BlockedInputMessaging: "No puedo procesar esa solicitud. Reformulela, por favor."
+      BlockedOutputsMessaging: "No puedo entregar esa respuesta."
+      ContentPolicyConfig:
+        FiltersConfig:
+          - Type: PROMPT_ATTACK
+            InputStrength: HIGH
+            OutputStrength: NONE
+      TopicPolicyConfig:
+        TopicsConfig:
+          - Name: CambioDePermisosFueraDePlantilla
+            Type: DENY
+            Definition: >
+              Solicitudes para conceder a contratistas, clientes o externos acceso
+              a finanzas, contratos o incidentes de seguridad fuera de la plantilla estandar.
+            Examples:
+              - "Dale al contratista acceso de edicion a Finanzas"
+              - "Comparte la carpeta de incidentes con el cliente"
+
+  VersionBarrera:
+    Type: AWS::Bedrock::GuardrailVersion
+    Properties:
+      GuardrailIdentifier: !Ref Barrera
+
+  # ------------------------------------------------------------------ Agente
+  RolAgente:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: {Service: bedrock.amazonaws.com}
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals: {"aws:SourceAccount": !Ref AWS::AccountId}
+      Policies:
+        - PolicyName: InvocarModeloYGuardrail
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                  - bedrock:GetInferenceProfile
+                Resource:
+                  - arn:aws:bedrock:*::foundation-model/*
+                  - !Sub "arn:aws:bedrock:*:${AWS::AccountId}:inference-profile/*"
+              - Effect: Allow
+                Action: bedrock:ApplyGuardrail
+                Resource: !GetAtt Barrera.GuardrailArn
+
+  Agente:
+    Type: AWS::Bedrock::Agent
+    Properties:
+      AgentName: !Ref NombreAgente
+      Description: Crea estructuras de carpetas de proyectos de construccion con accesos por rol.
+      AgentResourceRoleArn: !GetAtt RolAgente.Arn
+      FoundationModel: !Ref ModeloFundacional
+      IdleSessionTTLInSeconds: 900
+      AutoPrepare: true
+      GuardrailConfiguration:
+        GuardrailIdentifier: !GetAtt Barrera.GuardrailId
+        GuardrailVersion: !GetAtt VersionBarrera.Version
+      # Version compacta de src/agente_carpetas/instrucciones.md (mantener ambas sincronizadas)
+      Instruction: |
+        Eres "Arquitecto Documental", el asistente de la oficina de proyectos de una constructora. Tu trabajo es crear la estructura estandar de carpetas de un proyecto de construccion en Google Drive o en Microsoft 365 (SharePoint) con accesos restringidos por rol.
+        Como trabajas:
+        1. Reune antes de crear nada: codigo del proyecto (ej. OBR-2026-014), nombre, plataforma (google o microsoft) y como se asignan los roles: el dominio de correo si la empresa usa la convencion de grupos, o un JSON con los grupos por rol. Pregunta solo lo que falte, en un mismo mensaje.
+        2. Si el usuario no conoce los roles o carpetas, usa listar_roles_y_plantilla y explicalos en lenguaje simple.
+        3. Siempre llama primero a previsualizar_estructura y muestra el arbol con los accesos, destacando carpetas que NO heredan permisos, roles sin grupo asignado y accesos de externos (ARQ, CON, CLI).
+        4. Solo despues de que el usuario apruebe la vista previa, llama a crear_estructura. El sistema pedira una confirmacion adicional; no la saltes.
+        5. Al terminar, informa la URL raiz, carpetas creadas o existentes, permisos concedidos y errores con la accion sugerida.
+        Reglas: nunca inventes grupos, correos ni codigos; no des accesos fuera de la plantilla (las excepciones las aprueba el Director de Proyecto fuera de este asistente); si una herramienta devuelve un error de datos, pide solo el dato faltante. Responde en espanol, breve y profesional.
+      ActionGroups:
+        - ActionGroupName: GestionCarpetas
+          Description: Herramientas para planificar y crear estructuras de carpetas con permisos por rol.
+          ActionGroupExecutor:
+            Lambda: !GetAtt FuncionAcciones.Arn
+          FunctionSchema:
+            Functions:
+              - Name: listar_roles_y_plantilla
+                Description: Devuelve los roles del proyecto, niveles de acceso, carpetas principales y la convencion de nombres de grupos.
+                Parameters: {}
+              - Name: previsualizar_estructura
+                Description: Calcula (sin crear nada) el arbol de carpetas y los accesos efectivos por rol. Usar siempre antes de crear.
+                Parameters:
+                  codigo_proyecto:
+                    Type: string
+                    Description: Codigo unico del proyecto, 2-20 caracteres alfanumericos o guiones. Ej. OBR-2026-014
+                    Required: true
+                  nombre_proyecto:
+                    Type: string
+                    Description: Nombre descriptivo del proyecto. Ej. Edificio Mirador
+                    Required: true
+                  dominio:
+                    Type: string
+                    Description: Dominio de correo para armar los grupos por convencion. Ej. constructora.com
+                    Required: false
+                  asignaciones_json:
+                    Type: string
+                    Description: 'JSON rol -> lista de correos. Prefijo usuario: para personas. Ej. {"DIR":["pm@x.com"],"CLI":["usuario:ana@cliente.cl"]}'
+                    Required: false
+              - Name: crear_estructura
+                Description: Crea la estructura y aplica los permisos en la plataforma indicada. Es idempotente.
+                RequireConfirmation: ENABLED
+                Parameters:
+                  plataforma:
+                    Type: string
+                    Description: google, microsoft o simulacion
+                    Required: true
+                  codigo_proyecto:
+                    Type: string
+                    Description: Codigo unico del proyecto
+                    Required: true
+                  nombre_proyecto:
+                    Type: string
+                    Description: Nombre descriptivo del proyecto
+                    Required: true
+                  dominio:
+                    Type: string
+                    Description: Dominio de correo para la convencion de grupos
+                    Required: false
+                  asignaciones_json:
+                    Type: string
+                    Description: JSON rol -> lista de correos (mismo formato que en la vista previa)
+                    Required: false
+        - ActionGroupName: UserInputAction
+          ParentActionGroupSignature: AMAZON.UserInput   # permite al agente pedir datos faltantes
+
+  AliasAgente:
+    Type: AWS::Bedrock::AgentAlias
+    Properties:
+      AgentId: !GetAtt Agente.AgentId
+      AgentAliasName: v1
+
+Outputs:
+  AgentId:
+    Value: !GetAtt Agente.AgentId
+  AgentAliasId:
+    Value: !GetAtt AliasAgente.AgentAliasId
+  FuncionLambda:
+    Value: !Ref FuncionAcciones

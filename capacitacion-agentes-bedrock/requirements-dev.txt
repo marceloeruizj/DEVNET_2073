@@ -1,0 +1,3 @@
+-r src/requirements.txt
+bedrock-agentcore-starter-toolkit   # CLI "agentcore" (configure / deploy / invoke / status)
+pytest>=8
